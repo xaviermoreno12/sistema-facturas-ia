@@ -255,39 +255,12 @@
 <div id="toast">✨ Nueva factura detectada</div>
 
 <script>
-  const SHEET_ID = '1tVRwXhPcUCmserjY9clnAdaKksX5voerKPNi-8znpI4';
-  const CSV_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=1438140608`;
+  const SUPA_URL  = 'https://vlaaukgviimswlmtcehu.supabase.co';
+  const SUPA_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsYWF1a2d2aWltc3dsbXRjZWh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwOTQxMDYsImV4cCI6MjA5MjY3MDEwNn0.NDuNODIFTCx-DGznbr97XOD-NPPVWn5N8fUEu5N4VFU';
   const INTERVAL = 30;
-
-  // Columnas: Fecha(0) | Proveedor(1) | CUIT(2) | Importe_Neto(3) | IVA(4) | Total(5) | Categoria(6) | Estado_Pago(7)
-  const C = { FECHA:0, PROV:1, CUIT:2, NETO:3, IVA:4, TOTAL:5, CAT:6, ESTADO:7 };
 
   let countdown = INTERVAL;
   let lastCount = 0;
-
-  function parseCSV(text) {
-    const rows = []; let row = [], field = '', inQ = false;
-    for (let i = 0; i < text.length; i++) {
-      const ch = text[i], nx = text[i+1];
-      if (inQ) {
-        if (ch==='"' && nx==='"') { field+='"'; i++; }
-        else if (ch==='"') inQ=false;
-        else field+=ch;
-      } else {
-        if (ch==='"') inQ=true;
-        else if (ch===',') { row.push(field.trim()); field=''; }
-        else if (ch==='\n'||(ch==='\r'&&nx==='\n')) {
-          if(ch==='\r')i++;
-          row.push(field.trim()); field='';
-          if(row.some(c=>c)) rows.push(row);
-          row=[];
-        } else field+=ch;
-      }
-    }
-    row.push(field.trim());
-    if(row.some(c=>c)) rows.push(row);
-    return rows;
-  }
 
   function fmt(n) {
     const v = parseFloat((n||'0').replace(',','.'));
@@ -295,40 +268,35 @@
   }
 
   function estadoPill(e) {
-    const val = (e||'').toLowerCase();
-    if (val.includes('pag')) return `<span class="estado-pagado">✓ Pagado</span>`;
+    if ((e||'').toLowerCase().includes('pag')) return `<span class="estado-pagado">✓ Pagado</span>`;
     return `<span class="estado-pendiente">● Pendiente</span>`;
   }
 
-  function render(rows) {
-    if (rows.length <= 1) {
+  function render(data) {
+    if (!data || data.length === 0) {
       document.getElementById('content').innerHTML = `
         <div class="empty">
           <div class="empty-icon">📱</div>
           <h2>Esperando facturas...</h2>
           <p>Enviá una foto al bot de Telegram y los datos aparecen acá automáticamente en segundos.</p>
         </div>`;
-      ['stat-count','stat-total','stat-pending','stat-last'].forEach(id=>{
-        document.getElementById(id).textContent='—';
-      });
+      ['stat-count','stat-total','stat-pending','stat-last'].forEach(id=>document.getElementById(id).textContent='—');
       document.getElementById('pill').textContent='0 registros';
       lastCount=0; return;
     }
 
-    const data  = rows.slice(1);
     const count = data.length;
-
     let totalSum=0, pendientes=0;
     data.forEach(r=>{
-      const v = parseFloat((r[C.TOTAL]||'0').replace(',','.'));
+      const v = parseFloat((r.total||'0').replace(',','.'));
       if(!isNaN(v)) totalSum+=v;
-      if(!(r[C.ESTADO]||'').toLowerCase().includes('pag')) pendientes++;
+      if(!(r.estado_pago||'').toLowerCase().includes('pag')) pendientes++;
     });
 
     document.getElementById('stat-count').textContent   = count;
     document.getElementById('stat-total').textContent   = totalSum>0 ? fmt(totalSum.toString()) : '—';
     document.getElementById('stat-pending').textContent = pendientes;
-    document.getElementById('stat-last').textContent    = data[count-1]?.[C.FECHA] || '—';
+    document.getElementById('stat-last').textContent    = data[count-1]?.fecha || '—';
     document.getElementById('pill').textContent         = `${count} registro${count!==1?'s':''}`;
 
     if (lastCount>0 && count>lastCount) showToast();
@@ -336,16 +304,15 @@
 
     const tbody = data.map((r,i) => {
       const isNew = i===count-1;
-      const rowData = encodeURIComponent(JSON.stringify(r));
-      return `<tr class="${isNew?'newest':''}" style="cursor:pointer" onclick="showDetail(${JSON.stringify(r)})">
-        <td><span class="mono" style="font-size:.8rem">${r[C.FECHA]||'—'}</span></td>
-        <td style="font-weight:600">${r[C.PROV]||'—'}${isNew?'<span class="badge-new">NUEVA</span>':''}</td>
-        <td><span class="mono" style="color:#94a3b8;font-size:.78rem">${r[C.CUIT]||'—'}</span></td>
-        <td class="amount">$ ${fmt(r[C.NETO])}</td>
-        <td class="iva-val">$ ${fmt(r[C.IVA])}</td>
-        <td class="total-val">$ ${fmt(r[C.TOTAL])}</td>
-        <td><span class="cat">${r[C.CAT]||'—'}</span></td>
-        <td>${estadoPill(r[C.ESTADO])}</td>
+      return `<tr class="${isNew?'newest':''}" style="cursor:pointer" onclick="showDetail(${JSON.stringify(r).replace(/'/g,'&#39;')})">
+        <td><span class="mono" style="font-size:.8rem">${r.fecha||'—'}</span></td>
+        <td style="font-weight:600">${r.proveedor||'—'}${isNew?'<span class="badge-new">NUEVA</span>':''}</td>
+        <td><span class="mono" style="color:#94a3b8;font-size:.78rem">${r.cuit||'—'}</span></td>
+        <td class="amount">$ ${fmt(r.importe_neto)}</td>
+        <td class="iva-val">$ ${fmt(r.iva)}</td>
+        <td class="total-val">$ ${fmt(r.total)}</td>
+        <td><span class="cat">${r.categoria||'—'}</span></td>
+        <td>${estadoPill(r.estado_pago)}</td>
       </tr>`;
     }).join('');
 
@@ -366,14 +333,13 @@
     const badge = document.getElementById('badge');
     badge.classList.add('loading');
     try {
-      const res  = await fetch(CSV_URL+'&_='+Date.now());
-      const text = await res.text();
-      render(parseCSV(text));
+      const res = await fetch(`${SUPA_URL}/rest/v1/facturas?select=*&order=created_at.asc`, {
+        headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
+      });
+      const data = await res.json();
+      render(Array.isArray(data) ? data : []);
     } catch(e) { console.error(e); }
-    finally {
-      badge.classList.remove('loading');
-      countdown=INTERVAL;
-    }
+    finally { badge.classList.remove('loading'); countdown=INTERVAL; }
   }
 
   function showToast() {
@@ -392,23 +358,26 @@
 
   fetchData();
 
-  const LABELS = ['Fecha','Proveedor','CUIT','Importe Neto','IVA','Total','Categoría','Estado Pago'];
-  let currentRow = [];
+  const FIELDS = [
+    ['Fecha','fecha'],['Proveedor','proveedor'],['CUIT','cuit'],
+    ['Importe Neto','importe_neto'],['IVA','iva'],['Total','total'],
+    ['Categoría','categoria'],['Estado Pago','estado_pago']
+  ];
+  let currentRow = {};
 
   window.showDetail = function(r) {
-    if (!Array.isArray(r)) r = Object.values(r);
-    currentRow = r;
+    currentRow = typeof r === 'string' ? JSON.parse(r) : r;
     const body = document.getElementById('modal-body');
-    body.innerHTML = LABELS.map((label,i) => `
+    body.innerHTML = FIELDS.map(([label,key]) => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid #1c2a3e">
         <span style="font-family:'DM Mono',monospace;font-size:.72rem;color:#4a607a;text-transform:uppercase;letter-spacing:.05em">${label}</span>
-        <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:#e2e8f0;font-weight:500">${r[i]||'—'}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:.85rem;color:#e2e8f0;font-weight:500">${currentRow[key]||'—'}</span>
       </div>`).join('');
     document.getElementById('modal').style.display='flex';
   };
 
   window.copyAll = function() {
-    const text = LABELS.map((l,i)=>`${l}: ${currentRow[i]||'—'}`).join('\n');
+    const text = FIELDS.map(([l,k])=>`${l}: ${currentRow[k]||'—'}`).join('\n');
     navigator.clipboard.writeText(text).then(()=>{
       const btn = document.querySelector('#modal button:last-child');
       btn.textContent='✅ Copiado!';

@@ -304,7 +304,7 @@
 
     const tbody = data.map((r,i) => {
       const isNew = i===count-1;
-      return `<tr class="${isNew?'newest':''}" style="cursor:pointer" onclick="showDetail(${JSON.stringify(r).replace(/'/g,'&#39;')})">
+      return `<tr class="${isNew?'newest':''}" style="cursor:pointer" data-row="${encodeURIComponent(JSON.stringify(r))}" onclick="showDetail(this)">
         <td><span class="mono" style="font-size:.8rem">${r.fecha||'—'}</span></td>
         <td style="font-weight:600">${r.proveedor||'—'}${isNew?'<span class="badge-new">NUEVA</span>':''}</td>
         <td><span class="mono" style="color:#94a3b8;font-size:.78rem">${r.cuit||'—'}</span></td>
@@ -365,8 +365,9 @@
   ];
   let currentRow = {};
 
-  window.showDetail = function(r) {
-    currentRow = typeof r === 'string' ? JSON.parse(r) : r;
+  window.showDetail = function(el) {
+    const r = JSON.parse(decodeURIComponent(el.dataset.row));
+    currentRow = r;
     const body = document.getElementById('modal-body');
     body.innerHTML = FIELDS.map(([label,key]) => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid #1c2a3e">
